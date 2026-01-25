@@ -1,5 +1,6 @@
 packages:
     .
+    ./gh-integration-test
 optimization: False
 semaphore: True
 multi-repl: True
