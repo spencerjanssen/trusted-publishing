@@ -1,0 +1,13 @@
+[formatter.nixpkgs-fmt]
+command = "nixpkgs-fmt"
+includes = [
+    "*.nix"
+]
+
+
+[formatter.cabal-fmt]
+command = "cabal-fmt"
+options = ["--inplace"]
+includes = [
+    "*.cabal"
+]

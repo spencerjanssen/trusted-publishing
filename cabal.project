@@ -1,0 +1,5 @@
+packages:
+    .
+optimization: False
+semaphore: True
+multi-repl: True

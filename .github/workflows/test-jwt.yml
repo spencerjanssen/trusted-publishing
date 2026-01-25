@@ -1,0 +1,50 @@
+name: Test JWT Generation
+
+on:
+  push:
+    branches:
+        - main
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  test-jwt:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Request and echo JWT
+      run: |
+        echo "Requesting JWT token from GitHub Actions OIDC provider..."
+        
+        # Request the JWT token
+        JWT_TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+          "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://github.com/owner/repo" | \
+          jq -r '.value')
+        
+        echo "JWT Token received:"
+        echo "$JWT_TOKEN"
+        
+        echo ""
+        echo "JWT Header (decoded):"
+        echo "$JWT_TOKEN" | cut -d'.' -f1 | base64 -d 2>/dev/null | jq . || echo "Could not decode header"
+        
+        echo ""
+        echo "JWT Payload (decoded):"
+        echo "$JWT_TOKEN" | cut -d'.' -f2 | base64 -d 2>/dev/null | jq . || echo "Could not decode payload"
+        
+        echo ""
+        echo "JWT token length: ${#JWT_TOKEN} characters"
+
+    - name: Save JWT for potential use in tests
+      run: |
+        JWT_TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+          "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://github.com/owner/repo" | \
+          jq -r '.value')
+        echo "JWT_TOKEN=$JWT_TOKEN" >> $GITHUB_ENV
+        echo "JWT token saved to environment for potential use in subsequent steps"

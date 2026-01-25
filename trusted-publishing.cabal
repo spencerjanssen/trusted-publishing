@@ -1,0 +1,33 @@
+cabal-version:   3.4
+name:            trusted-publishing
+version:         0.0.0.1
+license:         BSD-3-Clause
+license-file:    LICENSE
+author:          Spencer Janssen
+maintainer:      spencerjanssen@gmail.com
+category:        Distribution
+build-type:      Simple
+extra-doc-files: CHANGELOG.md
+
+common warnings
+  ghc-options: -Wall
+
+library
+  import:           warnings
+
+  --cabal-fmt: expand src
+  exposed-modules:  TrustedPublishing
+  build-depends:
+    , aeson
+    , base          ^>=4.19.2.0
+    , bytestring
+    , containers
+    , http-conduit
+    , jose
+    , lens
+    , mtl
+    , network-uri
+    , text
+
+  hs-source-dirs:   src
+  default-language: GHC2021
