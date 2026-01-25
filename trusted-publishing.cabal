@@ -23,7 +23,7 @@ library
     , bytestring
     , containers
     , http-conduit
-    , jose
+    , jose ^>= 0.12
     , lens
     , mtl
     , network-uri

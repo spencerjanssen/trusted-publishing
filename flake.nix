@@ -15,6 +15,9 @@
       perSystem = { self', system, lib, config, pkgs, ... }: {
         haskellProjects.default = {
           basePackages = pkgs.haskell.packages.ghc912;
+          packages = {
+            jose.source = "0.12";
+          };
           devShell = {
             tools = hp: {
               inherit (pkgs)
