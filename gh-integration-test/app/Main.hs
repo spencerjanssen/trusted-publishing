@@ -1,5 +1,6 @@
 module Main where
 
+import Data.ByteString.Char8 qualified as BS8
 import Data.ByteString.Lazy qualified as LBS
 import System.Exit
 import System.IO
@@ -10,11 +11,11 @@ jwtFilePath = ".jwt-token"
 
 main :: IO ()
 main = do
-    rawjwt <- LBS.readFile jwtFilePath
+    rawjwt <- BS8.strip <$> BS8.readFile jwtFilePath
     result <-
         TrustedPublishing.getPublisher
             [TrustedPublishing.github]
-            rawjwt
+            (LBS.fromStrict rawjwt)
     case result of
         Left err -> do
             hPutStrLn stderr ("JWT verification failed: " ++ show err)
