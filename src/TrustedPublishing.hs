@@ -27,10 +27,11 @@ example :: LBS.ByteString
 example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTc2ODg3Nzg2MiwiaXNzIjoiaHR0cHM6Ly90b2tlbi5hY3Rpb25zLmdpdGh1YnVzZXJjb250ZW50LmNvbSIsInJlcG9zaXRvcnlfaWQiOiIxMjM0NSIsInJlcG9zaXRvcnlfb3duZXJfaWQiOiIxMzIiLCJlbnZpcm9ubWVudCI6bnVsbH0.D3KBONnXwjXyX_PTLcSVjm6TBWFULFyUsr3aTlgdnvQ"
 
 getPublisher ::
+    JWT.StringOrURI ->
     [Publisher result] ->
     LBS.ByteString ->
     IO (Either JWT.JWTError result)
-getPublisher trustedPublishers jwtbytes = JOSE.runJOSE do
+getPublisher expectedAudience trustedPublishers jwtbytes = JOSE.runJOSE do
     decoded <- JOSE.decodeCompact jwtbytes
     munverifiedIssuer <- (^. JWT.claimIss) <$> JWT.unsafeGetJWTClaimsSet decoded
     unverifiedIssuer <- case munverifiedIssuer of
@@ -42,7 +43,7 @@ getPublisher trustedPublishers jwtbytes = JOSE.runJOSE do
             Just p -> pure p
     verified <-
         JWT.verifyJWT
-            (JWT.defaultJWTValidationSettings (publisherIssuer ==))
+            (JWT.defaultJWTValidationSettings (expectedAudience ==))
             keystore
             decoded
     pure (publisherValidation verified)

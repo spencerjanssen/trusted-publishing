@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Main where
 
 import Data.ByteString.Char8 qualified as BS8
@@ -14,6 +16,7 @@ main = do
     rawjwt <- BS8.strip <$> BS8.readFile jwtFilePath
     result <-
         TrustedPublishing.getPublisher
+            "https://github.com/spencerjanssen/trusted-publishing"
             [TrustedPublishing.github]
             (LBS.fromStrict rawjwt)
     case result of
