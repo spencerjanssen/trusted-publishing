@@ -21,30 +21,55 @@ jobs:
     - name: Request and echo JWT
       run: |
         echo "Requesting JWT token from GitHub Actions OIDC provider..."
+        echo "Repository: ${{ github.repository }}"
+        echo "Request URL: $ACTIONS_ID_TOKEN_REQUEST_URL"
+        echo "Request Token available: $([ -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ] && echo "yes" || echo "no")"
         
-        # Request the JWT token
-        JWT_TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-          "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://github.com/owner/repo" | \
-          jq -r '.value')
+        # Build the audience URL with the actual repository
+        AUDIENCE="https://github.com/${{ github.repository }}"
+        echo "Using audience: $AUDIENCE"
         
+        # Request the JWT token with debugging
+        echo "Making request to OIDC provider..."
+        RESPONSE=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+          "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE")
+        
+        echo "Raw response:"
+        echo "$RESPONSE"
+        
+        # Extract the token
+        JWT_TOKEN=$(echo "$RESPONSE" | jq -r '.value // empty')
+        
+        echo ""
         echo "JWT Token received:"
         echo "$JWT_TOKEN"
         
-        echo ""
-        echo "JWT Header (decoded):"
-        echo "$JWT_TOKEN" | cut -d'.' -f1 | base64 -d 2>/dev/null | jq . || echo "Could not decode header"
-        
-        echo ""
-        echo "JWT Payload (decoded):"
-        echo "$JWT_TOKEN" | cut -d'.' -f2 | base64 -d 2>/dev/null | jq . || echo "Could not decode payload"
-        
-        echo ""
-        echo "JWT token length: ${#JWT_TOKEN} characters"
+        if [ -n "$JWT_TOKEN" ] && [ "$JWT_TOKEN" != "null" ]; then
+          echo ""
+          echo "JWT Header (decoded):"
+          echo "$JWT_TOKEN" | cut -d'.' -f1 | base64 -d 2>/dev/null | jq . || echo "Could not decode header"
+          
+          echo ""
+          echo "JWT Payload (decoded):"
+          echo "$JWT_TOKEN" | cut -d'.' -f2 | base64 -d 2>/dev/null | jq . || echo "Could not decode payload"
+          
+          echo ""
+          echo "JWT token length: ${#JWT_TOKEN} characters"
+        else
+          echo "ERROR: Failed to get JWT token"
+        fi
 
     - name: Save JWT for potential use in tests
       run: |
-        JWT_TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-          "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://github.com/owner/repo" | \
-          jq -r '.value')
-        echo "JWT_TOKEN=$JWT_TOKEN" >> $GITHUB_ENV
-        echo "JWT token saved to environment for potential use in subsequent steps"
+        AUDIENCE="https://github.com/${{ github.repository }}"
+        RESPONSE=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+          "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE")
+        JWT_TOKEN=$(echo "$RESPONSE" | jq -r '.value // empty')
+        
+        if [ -n "$JWT_TOKEN" ] && [ "$JWT_TOKEN" != "null" ]; then
+          echo "JWT_TOKEN=$JWT_TOKEN" >> $GITHUB_ENV
+          echo "JWT token saved to environment for potential use in subsequent steps"
+        else
+          echo "ERROR: Could not save JWT token - token was null or empty"
+          exit 1
+        fi
