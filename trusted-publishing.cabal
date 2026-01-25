@@ -19,7 +19,7 @@ library
   exposed-modules:  TrustedPublishing
   build-depends:
     , aeson
-    , base          ^>=4.19.2.0
+    , base >=4.19.2.0 && <5
     , bytestring
     , containers
     , http-conduit
