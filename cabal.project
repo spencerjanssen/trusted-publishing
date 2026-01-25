@@ -4,3 +4,4 @@ packages:
 optimization: False
 semaphore: True
 multi-repl: True
+with-compiler: ghc-9.12.2
