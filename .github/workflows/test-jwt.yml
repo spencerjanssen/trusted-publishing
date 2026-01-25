@@ -37,4 +37,5 @@ jobs:
 
     - name: Run Haskell integration test
       run: |
+        cabal update
         cabal run gh-integration-test
