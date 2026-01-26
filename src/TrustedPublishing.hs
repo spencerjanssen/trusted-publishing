@@ -83,14 +83,14 @@ instance FromJSON GithubWorkflowRef where
 -- pypi and crates use a regular expression here, unclear what is best
 wflowRefParser :: Attoparsec.Parser GithubWorkflowRef
 wflowRefParser = do
-    owner <- Attoparsec.takeWhile ghIdOk
+    owner <- Attoparsec.takeWhile1 ghIdOk
     void $ Attoparsec.string "/"
-    repo <- Attoparsec.takeWhile ghIdOk
+    repo <- Attoparsec.takeWhile1 ghIdOk
     void $ Attoparsec.string "@"
     void $ Attoparsec.string ".github/workflows/"
-    workflowFileName <- Attoparsec.takeWhile (\c -> c /= '/' && c /= '@')
+    workflowFileName <- Attoparsec.takeWhile1 (\c -> c /= '/' && c /= '@')
     void $ Attoparsec.string "@"
-    ref <- Attoparsec.takeWhile (/= '@')
+    ref <- Attoparsec.takeWhile1 (/= '@')
     Attoparsec.endOfInput
     pure GithubWorkflowRef{owner, repo, workflowFileName, ref}
   where
