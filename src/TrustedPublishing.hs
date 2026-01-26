@@ -13,18 +13,15 @@ import Crypto.JOSE qualified as JOSE
 import Crypto.JOSE.Types
 import Crypto.JWT qualified as JWT
 import Data.Aeson
-import Data.ByteString (ByteString)
+import Data.Attoparsec.Text qualified as Attoparsec
 import Data.ByteString.Lazy qualified as LBS
+import Data.Char
 import Data.Foldable (find)
 import Data.Maybe
 import Data.Text (Text)
-import Data.Text qualified as T
 import Network.HTTP.Client.Conduit
 import Network.HTTP.Simple
 import Network.URI
-
-example :: LBS.ByteString
-example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTc2ODg3Nzg2MiwiaXNzIjoiaHR0cHM6Ly90b2tlbi5hY3Rpb25zLmdpdGh1YnVzZXJjb250ZW50LmNvbSIsInJlcG9zaXRvcnlfaWQiOiIxMjM0NSIsInJlcG9zaXRvcnlfb3duZXJfaWQiOiIxMzIiLCJlbnZpcm9ubWVudCI6bnVsbH0.D3KBONnXwjXyX_PTLcSVjm6TBWFULFyUsr3aTlgdnvQ"
 
 getPublisher ::
     JWT.StringOrURI ->
@@ -38,18 +35,15 @@ getPublisher expectedAudience trustedPublishers jwtbytes = JOSE.runJOSE do
         Nothing -> throwError JWT.JWTNotInIssuer
         Just i -> pure i
     (Publisher publisherIssuer keystore publisherValidation) <-
-        case findIssuer unverifiedIssuer trustedPublishers of
+        case find (\(Publisher i _ _) -> i == unverifiedIssuer) trustedPublishers of
             Nothing -> throwError JWT.JWTNotInIssuer
             Just p -> pure p
-    verified <-
-        JWT.verifyJWT
-            (JWT.defaultJWTValidationSettings (expectedAudience ==))
-            keystore
-            decoded
+    let validationSettings =
+            JWT.defaultJWTValidationSettings (expectedAudience ==)
+                & JWT.issuerPredicate .~ (publisherIssuer ==)
+                & JWT.allowedSkew .~ 30
+    verified <- JWT.verifyJWT validationSettings keystore decoded
     pure (publisherValidation verified)
-
-findIssuer :: JWT.StringOrURI -> [Publisher result] -> Maybe (Publisher result)
-findIssuer iss issuers = find (\(Publisher i _ _) -> i == iss) issuers
 
 data Publisher result where
     Publisher ::
@@ -61,21 +55,84 @@ data Publisher result where
             parsed
             ks
         ) =>
+        -- | Issuer
         JWT.StringOrURI ->
+        -- | Key store
         ks ->
+        -- | Adapt the parsed claims to some result type
         (parsed -> result) ->
         Publisher result
 
 instance Functor Publisher where
     fmap f (Publisher iss keys validate) = Publisher iss keys (f . validate)
 
+data GithubWorkflowRef = GithubWorkflowRef
+    { owner :: Text
+    , repo :: Text
+    , workflowFileName :: Text
+    , ref :: Text
+    }
+    deriving (Show, Eq)
+
+instance FromJSON GithubWorkflowRef where
+    parseJSON = withText "GithubWorkflowRef" $ \t ->
+        case Attoparsec.parseOnly wflowRefParser t of
+            Left err -> fail $ "Failed to parse GithubWorkflowRef: " ++ err
+            Right ref' -> pure ref'
+
+-- pypi and crates use a regular expression here, unclear what is best
+wflowRefParser :: Attoparsec.Parser GithubWorkflowRef
+wflowRefParser = do
+    owner <- Attoparsec.takeWhile ghIdOk
+    void $ Attoparsec.string "/"
+    repo <- Attoparsec.takeWhile ghIdOk
+    void $ Attoparsec.string "@"
+    void $ Attoparsec.string ".github/workflows/"
+    workflowFileName <- Attoparsec.takeWhile (\c -> c /= '/' && c /= '@')
+    void $ Attoparsec.string "@"
+    ref <- Attoparsec.takeWhile (/= '@')
+    Attoparsec.endOfInput
+    pure GithubWorkflowRef{owner, repo, workflowFileName, ref}
+  where
+    ghIdOk c =
+        isAsciiLower c
+            || isAsciiUpper c
+            || (c >= '0' && c < '9')
+            || c == '-'
+            || c == '_'
+            || c == '.'
+
 data GithubClaims = GithubClaims
     { repositoryId :: Text
+    , repository :: Text
     , repositoryOwnerId :: Text
+    , repositoryOwner :: Text
     , environment :: Maybe Text
+    , workflowRef :: GithubWorkflowRef
+    , jobWorkflowRef :: GithubWorkflowRef
     , jwtClaims :: JWT.ClaimsSet
     }
     deriving (Show)
+
+data GithubTrustRelationship = GithubTrustRelationship
+    { trustedRepositoryId :: Text
+    , trustedRepository :: Text
+    , trustedRepositoryOwnerId :: Text
+    , trustedRepositoryOwner :: Text
+    , trustedEnvironment :: Maybe Text
+    }
+    deriving (Show)
+
+githubClaimsAreTrusted ::
+    GithubClaims ->
+    GithubTrustRelationship ->
+    Bool
+githubClaimsAreTrusted claims trust =
+    repositoryId claims == trustedRepositoryId trust
+        && repositoryOwnerId claims == trustedRepositoryOwnerId trust
+        && case trustedEnvironment trust of
+            Nothing -> True
+            Just env -> environment claims == Just env
 
 instance JWT.HasClaimsSet GithubClaims where
     claimsSet f s = fmap (\a' -> s{jwtClaims = a'}) (f (jwtClaims s))
@@ -83,10 +140,24 @@ instance JWT.HasClaimsSet GithubClaims where
 instance FromJSON GithubClaims where
     parseJSON = withObject "GithubClaims" $ \o -> do
         repositoryId <- o .: "repository_id"
+        repository <- o .: "repository"
         repositoryOwnerId <- o .: "repository_owner_id"
+        repositoryOwner <- o .: "repository_owner"
         environment <- o .:? "environment"
+        workflowRef <- o .: "workflow_ref"
+        jobWorkflowRef <- o .: "job_workflow_ref"
         jwtClaims <- parseJSON (Object o)
-        pure GithubClaims{repositoryId, repositoryOwnerId, environment, jwtClaims}
+        pure
+            GithubClaims
+                { repositoryId
+                , repository
+                , repositoryOwnerId
+                , repositoryOwner
+                , environment
+                , workflowRef
+                , jobWorkflowRef
+                , jwtClaims
+                }
 
 github :: Publisher GithubClaims
 github =
@@ -94,16 +165,6 @@ github =
         "https://token.actions.githubusercontent.com"
         (OpenIdDiscoveryUri $ fromJust $ parseURI "https://token.actions.githubusercontent.com/.well-known/openid-configuration")
         id
-
-generic :: Publisher JWT.ClaimsSet
-generic =
-    Publisher
-        "some publisher"
-        (undefined :: JWT.JWKSet)
-        id
-
-somePublishers :: [Publisher (Either GithubClaims JWT.ClaimsSet)]
-somePublishers = [Left <$> github, Right <$> generic]
 
 newtype OpenIdDiscoveryUri = OpenIdDiscoveryUri URI
 

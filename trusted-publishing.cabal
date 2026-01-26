@@ -19,11 +19,12 @@ library
   exposed-modules:  TrustedPublishing
   build-depends:
     , aeson
+    , attoparsec
     , base
     , bytestring
     , containers
     , http-conduit
-    , jose ^>= 0.12
+    , jose          ^>=0.12
     , lens
     , mtl
     , network-uri
