@@ -24,6 +24,7 @@ main = do
     trustedRepositoryOwner <- getEnvT "REPO_OWNER"
     trustedRepositoryOwnerId <- getEnvT "REPO_OWNER_ID"
     trustedWorkflowFilename <- getEnvT "WORKFLOW_FILENAME"
+    print ("Audience: ", audience)
 
     jwtbytes <- LBS.fromStrict . BS8.strip <$> BS8.readFile jwtFilePath
     claims <-
