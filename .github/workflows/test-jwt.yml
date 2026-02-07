@@ -13,7 +13,8 @@ permissions:
 jobs:
   test-jwt:
     runs-on: ubuntu-latest
-    
+    env:
+      AUDIENCE: https://github.com/${{ github.repository }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -39,7 +40,6 @@ jobs:
         fi
     - name: Run gh-integration-test
       run: |
-        AUDIENCE="https://github.com/${{ github.repository }}" \
         REPO="${{ github.repository }}" \
         REPO_ID="${{ github.repository_id }}" \
         REPO_OWNER="${{ github.repository_owner }}" \
