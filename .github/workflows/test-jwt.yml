@@ -25,11 +25,6 @@ jobs:
     - name: Get JWT token
       id: get-jwt
       run: |
-        AUDIENCE="https://github.com/${{ github.repository }}"
-        REPO="${{ github.repository }}"
-        REPO_ID="${{ github.repository_id }}"
-        REPO_OWNER="${{ github.repository_owner }}"
-        WORKFLOW_FILE_NAME="${{ github.workflow }}"
         RESPONSE=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
           "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE")
         JWT_TOKEN=$(echo "$RESPONSE" | jq -r '.value // empty')
@@ -44,9 +39,9 @@ jobs:
         fi
     - name: Run gh-integration-test
       run: |
-        AUDIENCE="https://github.com/${{ github.repository }}"
-        REPO="${{ github.repository }}"
-        REPO_ID="${{ github.repository_id }}"
-        REPO_OWNER="${{ github.repository_owner }}"
-        WORKFLOW_FILE_NAME="${{ github.workflow }}"
+        export AUDIENCE="https://github.com/${{ github.repository }}"
+        export REPO="${{ github.repository }}"
+        export REPO_ID="${{ github.repository_id }}"
+        export REPO_OWNER="${{ github.repository_owner }}"
+        export WORKFLOW_FILE_NAME="${{ github.workflow }}"
         nix run .#gh-integration-test
