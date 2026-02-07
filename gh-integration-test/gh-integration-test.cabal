@@ -19,6 +19,7 @@ executable gh-integration-test
     , base
     , bytestring
     , trusted-publishing
+    , text
 
   hs-source-dirs:   app
   default-language: GHC2021

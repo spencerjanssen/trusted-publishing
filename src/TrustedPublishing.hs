@@ -80,6 +80,7 @@ instance FromJSON GithubWorkflowRef where
             Left err -> fail $ "Failed to parse GithubWorkflowRef: " ++ err
             Right ref' -> pure ref'
 
+-- todo, needs further consideration
 -- pypi and crates use a regular expression here, unclear what is best
 -- https://github.com/rust-lang/crates.io/blob/1e783ff78836d2f4c719e5f1f637f25844c13010/crates/crates_io_trustpub/src/github/workflows.rs#L7
 -- https://github.com/pypi/warehouse/blob/d05b7c7726126f52fffcdc98a125759110e2a77d/warehouse/oidc/models/github.py#L35
@@ -120,6 +121,7 @@ data GithubTrustRelationship = GithubTrustRelationship
     , trustedRepository :: Text
     , trustedRepositoryOwnerId :: Text
     , trustedRepositoryOwner :: Text
+    , trustedWorkflowFilename :: Text
     , trustedEnvironment :: Maybe Text
     }
     deriving (Show)
@@ -130,7 +132,10 @@ githubClaimsAreTrusted ::
     Bool
 githubClaimsAreTrusted claims trust =
     repositoryId claims == trustedRepositoryId trust
+        && repository claims == trustedRepository trust
         && repositoryOwnerId claims == trustedRepositoryOwnerId trust
+        && repositoryOwner claims == trustedRepositoryOwner trust
+        && workflowFileName (workflowRef claims) == trustedWorkflowFilename trust
         && case trustedEnvironment trust of
             Nothing -> True
             Just env -> environment claims == Just env
