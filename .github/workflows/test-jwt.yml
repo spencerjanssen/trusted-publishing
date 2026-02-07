@@ -39,9 +39,9 @@ jobs:
         fi
     - name: Run gh-integration-test
       run: |
-        export AUDIENCE="https://github.com/${{ github.repository }}"
-        export REPO="${{ github.repository }}"
-        export REPO_ID="${{ github.repository_id }}"
-        export REPO_OWNER="${{ github.repository_owner }}"
-        export WORKFLOW_FILE_NAME="${{ github.workflow }}"
+        AUDIENCE="https://github.com/${{ github.repository }}" \
+        REPO="${{ github.repository }}" \
+        REPO_ID="${{ github.repository_id }}" \
+        REPO_OWNER="${{ github.repository_owner }}" \
+        WORKFLOW_FILE_NAME="${{ github.workflow }}" \
         nix run .#gh-integration-test
