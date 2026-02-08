@@ -6,6 +6,7 @@ module Main where
 import Data.ByteString.Char8 qualified as BS8
 import Data.ByteString.Lazy qualified as LBS
 import Data.String
+import Data.Text.IO qualified as T
 import System.Environment
 import System.Exit
 import TrustedPublishing
@@ -49,8 +50,9 @@ main = do
                     , trustedRepositoryOwnerId
                     , trustedRepositoryOwner
                     }
-    if trustVerified
-        then putStrLn "Claims are trusted for this repository and workflow."
-        else do
-            putStrLn "Claims are NOT trusted for this repository and workflow."
+    case trustVerified of
+        Trusted -> putStrLn "Claims are trusted for this repository and workflow."
+        Untrusted reasons -> do
+            putStrLn "Claims are NOT trusted for this repository and workflow. Reasons:"
+            mapM_ T.putStrLn reasons
             exitFailure

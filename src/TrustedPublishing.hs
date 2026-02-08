@@ -17,6 +17,7 @@ import Data.Attoparsec.Text qualified as Attoparsec
 import Data.ByteString.Lazy qualified as LBS
 import Data.Char
 import Data.Foldable (find)
+import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe
 import Data.Text (Text)
 import Network.HTTP.Client.Conduit
@@ -126,19 +127,31 @@ data GithubTrustRelationship = GithubTrustRelationship
     }
     deriving (Show)
 
+data TrustResult
+    = Trusted
+    | Untrusted (NonEmpty Text)
+
+instance Semigroup TrustResult where
+    Untrusted xs <> Untrusted ys = Untrusted (xs <> ys)
+    Trusted <> Untrusted ys = Untrusted ys
+    Untrusted xs <> Trusted = Untrusted xs
+    Trusted <> Trusted = Trusted
+
 githubClaimsAreTrusted ::
     GithubClaims ->
     GithubTrustRelationship ->
-    Bool
+    TrustResult
 githubClaimsAreTrusted claims trust =
-    repositoryId claims == trustedRepositoryId trust
-        && repository claims == trustedRepository trust
-        && repositoryOwnerId claims == trustedRepositoryOwnerId trust
-        && repositoryOwner claims == trustedRepositoryOwner trust
-        && workflowFileName (workflowRef claims) == trustedWorkflowFilename trust
-        && case trustedEnvironment trust of
-            Nothing -> True
-            Just env -> environment claims == Just env
+    v (repositoryId claims == trustedRepositoryId trust) "Repository ID does not match trusted value"
+        <> v (repository claims == trustedRepository trust) "Repository does not match trusted value"
+        <> v (repositoryOwnerId claims == trustedRepositoryOwnerId trust) "Repository Owner ID does not match trusted value"
+        <> v (repositoryOwner claims == trustedRepositoryOwner trust) "Repository Owner does not match trusted value"
+        <> v (workflowFileName (workflowRef claims) == trustedWorkflowFilename trust) "Workflow filename does not match trusted value"
+        <> case trustedEnvironment trust of
+            Nothing -> Trusted
+            Just env -> v (environment claims == Just env) "Environment does not match trusted value"
+  where
+    v b m = if b then Trusted else Untrusted (pure m)
 
 instance JWT.HasClaimsSet GithubClaims where
     claimsSet f s = fmap (\a' -> s{jwtClaims = a'}) (f (jwtClaims s))
