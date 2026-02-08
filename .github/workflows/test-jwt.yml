@@ -44,5 +44,5 @@ jobs:
         REPO_ID="${{ github.repository_id }}" \
         REPO_OWNER="${{ github.repository_owner }}" \
         REPO_OWNER_ID="${{ github.repository_owner_id }}" \
-        WORKFLOW_FILENAME="${{ github.workflow }}" \
+        WORKFLOW_FILENAME=test-jwt.yml \
         nix run .#gh-integration-test
