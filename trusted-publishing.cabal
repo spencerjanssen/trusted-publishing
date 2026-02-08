@@ -19,7 +19,6 @@ library
   exposed-modules:  TrustedPublishing
   build-depends:
     , aeson
-    , attoparsec
     , base
     , bytestring
     , containers
@@ -28,6 +27,7 @@ library
     , lens
     , mtl
     , network-uri
+    , pcre2
     , text
 
   hs-source-dirs:   src

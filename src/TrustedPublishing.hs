@@ -1,6 +1,9 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module TrustedPublishing where
 
@@ -13,7 +16,6 @@ import Crypto.JOSE qualified as JOSE
 import Crypto.JOSE.Types
 import Crypto.JWT qualified as JWT
 import Data.Aeson
-import Data.Attoparsec.Text qualified as Attoparsec
 import Data.ByteString.Lazy qualified as LBS
 import Data.Char
 import Data.Foldable (find)
@@ -23,6 +25,8 @@ import Data.Text (Text)
 import Network.HTTP.Client.Conduit
 import Network.HTTP.Simple
 import Network.URI
+import Text.Regex.Pcre2
+import Text.Show qualified as Text
 
 getPublisher ::
     JWT.StringOrURI ->
@@ -67,43 +71,11 @@ data Publisher result where
 instance Functor Publisher where
     fmap f (Publisher iss keys validate) = Publisher iss keys (f . validate)
 
-data GithubWorkflowRef = GithubWorkflowRef
-    { owner :: Text
-    , repo :: Text
-    , workflowFileName :: Text
-    , ref :: Text
-    }
-    deriving (Show, Eq)
-
-instance FromJSON GithubWorkflowRef where
-    parseJSON = withText "GithubWorkflowRef" $ \t ->
-        case Attoparsec.parseOnly wflowRefParser t of
-            Left err -> fail $ "Failed to parse GithubWorkflowRef: " ++ err
-            Right ref' -> pure ref'
-
--- todo, needs further consideration
--- pypi and crates use a regular expression here, unclear what is best
 -- https://github.com/rust-lang/crates.io/blob/1e783ff78836d2f4c719e5f1f637f25844c13010/crates/crates_io_trustpub/src/github/workflows.rs#L7
--- https://github.com/pypi/warehouse/blob/d05b7c7726126f52fffcdc98a125759110e2a77d/warehouse/oidc/models/github.py#L35
-wflowRefParser :: Attoparsec.Parser GithubWorkflowRef
-wflowRefParser = do
-    owner <- Attoparsec.takeWhile1 ghIdOk
-    void $ Attoparsec.string "/"
-    repo <- Attoparsec.takeWhile1 ghIdOk
-    void $ Attoparsec.string "/.github/workflows/"
-    workflowFileName <- Attoparsec.takeWhile1 (\c -> c /= '/' && c /= '@')
-    void $ Attoparsec.string "@"
-    ref <- Attoparsec.takeWhile1 (/= '@')
-    Attoparsec.endOfInput
-    pure GithubWorkflowRef{owner, repo, workflowFileName, ref}
-  where
-    ghIdOk c =
-        isAsciiLower c
-            || isAsciiUpper c
-            || (c >= '0' && c < '9')
-            || c == '-'
-            || c == '_'
-            || c == '.'
+extractWorkflowFilename :: Text -> Maybe Text
+extractWorkflowFilename = \case
+    [regex|(?<x>[^/]+\.(yml|yaml))(@.+)|] -> Just x
+    _ -> Nothing
 
 data GithubClaims = GithubClaims
     { repositoryId :: Text
@@ -111,8 +83,8 @@ data GithubClaims = GithubClaims
     , repositoryOwnerId :: Text
     , repositoryOwner :: Text
     , environment :: Maybe Text
-    , workflowRef :: GithubWorkflowRef
-    , jobWorkflowRef :: GithubWorkflowRef
+    , workflowRef :: Text
+    , jobWorkflowRef :: Text
     , jwtClaims :: JWT.ClaimsSet
     }
     deriving (Show)
@@ -146,7 +118,16 @@ githubClaimsAreTrusted claims trust =
         <> v (repository claims == trustedRepository trust) "Repository does not match trusted value"
         <> v (repositoryOwnerId claims == trustedRepositoryOwnerId trust) "Repository Owner ID does not match trusted value"
         <> v (repositoryOwner claims == trustedRepositoryOwner trust) "Repository Owner does not match trusted value"
-        <> v (workflowFileName (workflowRef claims) == trustedWorkflowFilename trust) "Workflow filename does not match trusted value"
+        <> case extractWorkflowFilename $ workflowRef claims of
+            Nothing -> Untrusted (pure "Workflow filename could not be extracted from workflow_ref claim")
+            Just workflowFilename
+                | workflowFilename == trustedWorkflowFilename trust -> Trusted
+                | otherwise ->
+                    Untrusted $
+                        pure $
+                            "Workflow filename '"
+                                <> workflowFilename
+                                <> "' does not match trusted value"
         <> case trustedEnvironment trust of
             Nothing -> Trusted
             Just env -> v (environment claims == Just env) "Environment does not match trusted value"
