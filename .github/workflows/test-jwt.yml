@@ -38,6 +38,8 @@ jobs:
           echo "ERROR: Failed to get JWT token"
           exit 1
         fi
+    - name: Build gh-integration-test
+      run: nix build .#gh-integration-test --out-link built-gh-integration-test
     - name: Run gh-integration-test
       run: |
         REPO="${{ github.repository }}" \
@@ -45,4 +47,4 @@ jobs:
         REPO_OWNER="${{ github.repository_owner }}" \
         REPO_OWNER_ID="${{ github.repository_owner_id }}" \
         WORKFLOW_FILENAME=test-jwt.yml \
-        nix run .#gh-integration-test
+        ./built-gh-integration-test/bin/gh-integration-test
